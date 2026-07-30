@@ -936,16 +936,32 @@ function speakTextTTS(text) {
   }
 
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 0.6;
-  utterance.pitch = 0.75;
+  utterance.rate = 0.55; // Very slow calm pace for meditation
 
   const targetLang = appState.lang === 'he' ? 'he-IL' : (appState.lang === 'en' ? 'en-US' : 'ru-RU');
   utterance.lang = targetLang;
 
   const voices = window.speechSynthesis.getVoices();
   if (voices && voices.length > 0) {
-    const matchedVoice = voices.find(v => v.lang.startsWith(targetLang.slice(0, 2)));
-    if (matchedVoice) utterance.voice = matchedVoice;
+    // 1. Search for Male / Deep voices first (Pavel, Dmitry, Alex, Male, Avri, etc.)
+    const maleVoice = voices.find(v => 
+      v.lang.startsWith(targetLang.slice(0, 2)) && 
+      (v.name.includes('Pavel') || v.name.includes('Dmitry') || v.name.includes('Male') || 
+       v.name.includes('Alex') || v.name.includes('Avri') || v.name.includes('George') ||
+       v.name.includes('David') || v.name.includes('Daniel') || v.name.includes('Stefan'))
+    );
+
+    if (maleVoice) {
+      utterance.voice = maleVoice;
+      utterance.pitch = 0.65; // Natural deep male tone
+    } else {
+      // 2. If only female voice exists in browser OS, pitch-shift down to 0.4 for a deep warm tone
+      const langVoice = voices.find(v => v.lang.startsWith(targetLang.slice(0, 2)));
+      if (langVoice) utterance.voice = langVoice;
+      utterance.pitch = 0.40; // Lower pitch to transform female voice to deep low tone
+    }
+  } else {
+    utterance.pitch = 0.40;
   }
 
   utterance.onstart = () => {
