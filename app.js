@@ -836,10 +836,8 @@ function generatePersonalMeditation() {
   // Force reset playing state for fresh generation
   appState.isPlayingAudio = false;
 
-  if (audioSource === 'azure') {
-    const profileId = appState.azureProfileId || 'AZURE-SPEAKER-88492';
-    document.getElementById('player-subtitle').innerText = `🎙 Azure Personal Voice (${profileId}) • Замедленный темп 0.75x`;
-    speakTextTTS(customText);
+  if (appState.recordedAudioUrl || audioSource === 'azure') {
+    playParentRecordedVoice();
   } else if (audioSource === 'tts') {
     document.getElementById('player-subtitle').innerText = `🤖 Динамический ИИ-диктор • Низкий тембр`;
     speakTextTTS(customText);
@@ -849,6 +847,40 @@ function generatePersonalMeditation() {
   }
 
   logClickAnalytics('Meditation_Generated', name, 0, { audio_source: audioSource });
+}
+
+// Play Parent's Actual Recorded Voice Audio
+function playParentRecordedVoice() {
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  if (appState.audioTrack) appState.audioTrack.pause();
+
+  if (appState.recordedAudioUrl) {
+    const parentAudio = new Audio(appState.recordedAudioUrl);
+    appState.isPlayingAudio = true;
+    document.getElementById('play-btn').innerText = "⏸";
+    document.getElementById('player-subtitle').innerText = "🎙 Озвучивание записанным голосом родителя!";
+
+    parentAudio.play().then(() => {
+      console.log("▶ Playing parent recorded audio...");
+    }).catch(err => {
+      console.warn("Parent recorded audio play error:", err);
+      playMP3AudioTrack(true);
+    });
+
+    parentAudio.onended = () => {
+      appState.isPlayingAudio = false;
+      document.getElementById('play-btn').innerText = "▶";
+    };
+  } else {
+    alert("🎙 Вы еще не записали свой голос! Нажмите микрофон слева для записи отрывка вашего голоса.");
+    const micBtn = document.getElementById('mic-btn');
+    if (micBtn) {
+      micBtn.classList.add('recording');
+      setTimeout(() => micBtn.classList.remove('recording'), 3000);
+    }
+    document.getElementById('player-subtitle').innerText = "🎵 Студийная MP3 фонограмма (Голос не записан)";
+    playMP3AudioTrack(true);
+  }
 }
 
 // Play Studio Audio Track (meditation1.mp3)
