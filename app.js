@@ -801,6 +801,13 @@ function generatePersonalMeditation() {
 
   if (appState.lang === 'he') {
     customText = BASE_MEDITATION_TEMPLATE_HE.replace(/{NAME}/g, name);
+  } else if (appState.lang === 'en') {
+    customText = BASE_MEDITATION_TEMPLATE_RU
+      .replace(/{NAME}/g, name)
+      .replace(/{GENDER_END}/g, '')
+      .replace(/{GENDER_ADJ}/g, '')
+      .replace(/{GENDER_WIZARD}/g, '')
+      .replace(/{GENDER_FRIEND}/g, '');
   } else {
     const genderEnd = isGirl ? 'а' : '';
     const genderAdj = isGirl ? 'ая' : 'ый';
@@ -818,9 +825,15 @@ function generatePersonalMeditation() {
   document.getElementById('meditation-text-box').innerText = customText;
   document.getElementById('player-title').innerText = `${name} — ${appState.lang === 'he' ? 'סיפור-מדיטציה' : 'Рассказ-Медитация'}`;
   
-  if (audioSource === 'tts') {
+  if (audioSource === 'azure') {
+    const profileId = appState.azureProfileId || 'AZURE-SPEAKER-88492';
+    document.getElementById('player-subtitle').innerText = `🎙 Azure Personal Voice (${profileId}) • Замедленный темп 0.75x`;
+    speakTextTTS(customText);
+  } else if (audioSource === 'tts') {
+    document.getElementById('player-subtitle').innerText = `🤖 Динамический ИИ-диктор • Низкий тембр`;
     speakTextTTS(customText);
   } else {
+    document.getElementById('player-subtitle').innerText = `🎵 Студийная MP3 фонограмма • Без музыки`;
     playMP3AudioTrack();
   }
 
@@ -855,16 +868,26 @@ function togglePlayAudio() {
   generatePersonalMeditation();
 }
 
-// Speech Synthesis TTS (Slow calm male voice)
+// Speech Synthesis TTS (Slow calm voice with dynamic voice selection)
 function speakTextTTS(text) {
   if (appState.audioTrack) appState.audioTrack.pause();
-  if (!window.speechSynthesis) return;
+  if (!window.speechSynthesis) {
+    alert("В вашем браузере недоступен SpeechSynthesis. Проигрывается MP3 фонограмма.");
+    playMP3AudioTrack();
+    return;
+  }
 
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.rate = 0.6;
   utterance.pitch = 0.75;
-  utterance.lang = appState.lang === 'he' ? 'he-IL' : 'ru-RU';
+
+  const targetLang = appState.lang === 'he' ? 'he-IL' : (appState.lang === 'en' ? 'en-US' : 'ru-RU');
+  utterance.lang = targetLang;
+
+  const voices = window.speechSynthesis.getVoices();
+  const matchedVoice = voices.find(v => v.lang.startsWith(targetLang.slice(0, 2)));
+  if (matchedVoice) utterance.voice = matchedVoice;
 
   utterance.onstart = () => {
     appState.isPlayingAudio = true;
@@ -876,6 +899,12 @@ function speakTextTTS(text) {
     appState.isPlayingAudio = false;
     document.getElementById('play-btn').innerText = "▶";
     document.getElementById('player-progress').style.width = "100%";
+  };
+
+  utterance.onerror = (e) => {
+    console.warn("SpeechSynthesis error:", e);
+    appState.isPlayingAudio = false;
+    document.getElementById('play-btn').innerText = "▶";
   };
 
   window.speechSynthesis.speak(utterance);
