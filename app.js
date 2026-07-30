@@ -825,6 +825,17 @@ function generatePersonalMeditation() {
   document.getElementById('meditation-text-box').innerText = customText;
   document.getElementById('player-title').innerText = `${name} — ${appState.lang === 'he' ? 'סיפור-מדיטציה' : 'Рассказ-Медитация'}`;
   
+  // Smooth scroll to player card on mobile & desktop
+  const playerCard = document.querySelector('.player-card');
+  if (playerCard) {
+    playerCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    playerCard.style.boxShadow = '0 0 40px rgba(255, 107, 0, 0.5)';
+    setTimeout(() => { playerCard.style.boxShadow = ''; }, 2000);
+  }
+
+  // Force reset playing state for fresh generation
+  appState.isPlayingAudio = false;
+
   if (audioSource === 'azure') {
     const profileId = appState.azureProfileId || 'AZURE-SPEAKER-88492';
     document.getElementById('player-subtitle').innerText = `🎙 Azure Personal Voice (${profileId}) • Замедленный темп 0.75x`;
@@ -834,25 +845,28 @@ function generatePersonalMeditation() {
     speakTextTTS(customText);
   } else {
     document.getElementById('player-subtitle').innerText = `🎵 Студийная MP3 фонограмма • Без музыки`;
-    playMP3AudioTrack();
+    playMP3AudioTrack(true);
   }
 
   logClickAnalytics('Meditation_Generated', name, 0, { audio_source: audioSource });
 }
 
 // Play Studio Audio Track (meditation1.mp3)
-function playMP3AudioTrack() {
-  if (window.speechSynthesis) window.speechSynthesis.cancel();
+function playMP3AudioTrack(forceStart = false) {
+  if (window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
 
   if (!appState.audioTrack) {
     initAudioPlayer();
   }
 
-  if (appState.isPlayingAudio) {
+  if (appState.isPlayingAudio && !forceStart) {
     appState.audioTrack.pause();
     appState.isPlayingAudio = false;
     document.getElementById('play-btn').innerText = "▶";
   } else {
+    appState.audioTrack.currentTime = 0;
     appState.audioTrack.play().then(() => {
       appState.isPlayingAudio = true;
       document.getElementById('play-btn').innerText = "⏸";
@@ -865,7 +879,14 @@ function playMP3AudioTrack() {
 }
 
 function togglePlayAudio() {
-  generatePersonalMeditation();
+  if (appState.isPlayingAudio) {
+    if (appState.audioTrack) appState.audioTrack.pause();
+    if (window.speechSynthesis) window.speechSynthesis.pause();
+    appState.isPlayingAudio = false;
+    document.getElementById('play-btn').innerText = "▶";
+  } else {
+    generatePersonalMeditation();
+  }
 }
 
 // Speech Synthesis TTS (Slow calm voice with dynamic voice selection)
@@ -873,11 +894,15 @@ function speakTextTTS(text) {
   if (appState.audioTrack) appState.audioTrack.pause();
   if (!window.speechSynthesis) {
     alert("В вашем браузере недоступен SpeechSynthesis. Проигрывается MP3 фонограмма.");
-    playMP3AudioTrack();
+    playMP3AudioTrack(true);
     return;
   }
 
   window.speechSynthesis.cancel();
+  if (window.speechSynthesis.resume) {
+    window.speechSynthesis.resume();
+  }
+
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.rate = 0.6;
   utterance.pitch = 0.75;
@@ -886,8 +911,10 @@ function speakTextTTS(text) {
   utterance.lang = targetLang;
 
   const voices = window.speechSynthesis.getVoices();
-  const matchedVoice = voices.find(v => v.lang.startsWith(targetLang.slice(0, 2)));
-  if (matchedVoice) utterance.voice = matchedVoice;
+  if (voices && voices.length > 0) {
+    const matchedVoice = voices.find(v => v.lang.startsWith(targetLang.slice(0, 2)));
+    if (matchedVoice) utterance.voice = matchedVoice;
+  }
 
   utterance.onstart = () => {
     appState.isPlayingAudio = true;
@@ -905,6 +932,7 @@ function speakTextTTS(text) {
     console.warn("SpeechSynthesis error:", e);
     appState.isPlayingAudio = false;
     document.getElementById('play-btn').innerText = "▶";
+    playMP3AudioTrack(true);
   };
 
   window.speechSynthesis.speak(utterance);
